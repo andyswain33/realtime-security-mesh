@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Security Mesh</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .status { padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+        .status.disconnected { background: #ffebee; color: #c62828; }
+        .status.connected { background: #e8f5e9; color: #2e7d32; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { padding: 10px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1; font-size: 16px; }
+        button { padding: 10px 20px; border: none; border-radius: 4px; background: #0056b3; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #004494; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #fafafa; border: 1px solid #ddd; padding: 20px; border-radius: 8px; text-align: center; }
+        .occupancy-count { font-size: 48px; font-weight: bold; color: #0056b3; margin: 10px 0; }
+        .log-box { background: #1e1e1e; color: #4af626; font-family: monospace; padding: 15px; border-radius: 8px; height: 300px; overflow-y: auto; text-align: left; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>Global PACS Gateway</h2>
+        <span id="connectionStatus" class="status disconnected">Disconnected</span>
+    </div>
+
+    <div class="controls">
+        <input type="text" id="zoneInput" value="Main Lobby" placeholder="Enter Security Zone ID...">
+        <button onclick="subscribe()">Monitor Zone</button>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <h3>Live Occupancy</h3>
+            <div id="occupancyDisplay" class="occupancy-count">0</div>
+            <p style="color: #666; font-size: 12px;">Waiting for telemetry...</p>
+        </div>
+        <div class="card" style="grid-column: span 2;">
+            <h3 style="text-align: left; margin-top: 0;">Security Event Log</h3>
+            <div id="eventLog" class="log-box">System initialized. Awaiting events...<br></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Point this to the Gateway.Dashboard URL
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("http://localhost:5003/securityHub")
+        .withAutomaticReconnect()
+        .build();
+
+    const statusBadge = document.getElementById("connectionStatus");
+    const logBox = document.getElementById("eventLog");
+    const occupancyDisplay = document.getElementById("occupancyDisplay");
+
+    function logMessage(msg, color = "#4af626") {
+        const time = new Date().toLocaleTimeString();
+        logBox.innerHTML = `<span style="color: #888">[${time}]</span> <span style="color: ${color}">${msg}</span><br>` + logBox.innerHTML;
+    }
+
+    // 1. Listen for the strictly-typed events defined in our C# ISecurityDashboardClient interface
+    connection.on("ReceiveZoneUpdate", (zoneId, currentOccupancy, lastEventId) => {
+        occupancyDisplay.innerText = currentOccupancy;
+        logMessage(`[Zone: ${zoneId}] Occupancy updated to ${currentOccupancy}. EventID: ${lastEventId}`);
+    });
+
+    connection.on("ReceiveSecurityAlert", (message) => {
+        logMessage(`ALERT: ${message}`, "#ff5252");
+    });
+
+    // 2. Start the connection
+    async function startConnection() {
+        try {
+            await connection.start();
+            statusBadge.innerText = "Connected";
+            statusBadge.className = "status connected";
+            logMessage("SignalR WebSocket connected successfully.", "#00bcd4");
+        } catch (err) {
+            logMessage("Error connecting to hub: " + err.toString(), "#ff5252");
+            setTimeout(startConnection, 5000);
+        }
+    }
+
+    // 3. Subscribe to a specific SignalR Group
+    async function subscribe() {
+        const zoneId = document.getElementById("zoneInput").value;
+        if (!zoneId) return;
+        
+        try {
+            await connection.invoke("SubscribeToZone", zoneId);
+            logMessage(`Subscribed to telemetry for: ${zoneId}`, "#ffeb3b");
+        } catch (err) {
+            logMessage("Subscription failed: " + err.toString(), "#ff5252");
+        }
+    }
+
+    startConnection();
+</script>
+
+</body>
+</html>

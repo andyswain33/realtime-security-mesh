@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    # Using the management tag provides a built-in web UI to monitor queues and exchanges
+    image: rabbitmq:3-management-alpine
+    container_name: security_mesh_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP protocol port (used by your .NET apps)
+      - "15672:15672" # Management UI port (accessible via browser)
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: AdminPacs2026!
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    # Redis is lightweight and perfect for the SignalR backplane or global occupancy caching
+    image: redis:7-alpine
+    container_name: security_mesh_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # Named volumes ensure data persists even if the containers are torn down
+  rabbitmq_data:
+  redis_data:
