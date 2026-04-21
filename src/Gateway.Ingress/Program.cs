@@ -12,6 +12,10 @@ builder.Services.AddSingleton<IRabbitMqPublisher, RabbitMqPublisher>();
 
 var app = builder.Build();
 
+// Static JsonSerializerOptions for high performance
+var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
 // 2. Define the High-Speed Ingress Endpoint
 app.MapPost("/api/events/telemetry", async (
     HttpContext context,
@@ -25,22 +29,22 @@ app.MapPost("/api/events/telemetry", async (
     // B. Run the AST validation
     if (!sanitizer.IsSafeTelemetry(rawPayload))
     {
-        // Log the security breach attempt here
-        return Results.BadRequest(new { error = "Malicious payload structure detected." });
+        // Log the security breach attempt internally - don't expose details to client
+        logger.LogWarning("Malicious payload structure detected from {RemoteIP}", context.Connection.RemoteIpAddress);
+        return Results.BadRequest();
     }
 
     // C. Safely deserialize the validated payload
     SecurityEvent? securityEvent;
     try
     {
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        securityEvent = JsonSerializer.Deserialize<SecurityEvent>(rawPayload, options);
+        securityEvent = JsonSerializer.Deserialize<SecurityEvent>(rawPayload, jsonOptions);
 
-        if (securityEvent is null) return Results.BadRequest(new { error = "Empty payload." });
+        if (securityEvent is null) return Results.BadRequest();
     }
     catch (JsonException)
     {
-        return Results.BadRequest(new { error = "Invalid telemetry schema." });
+        return Results.BadRequest();
     }
 
     // D. Drop the message onto the RabbitMQ exchange

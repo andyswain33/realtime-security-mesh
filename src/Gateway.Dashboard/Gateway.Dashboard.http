@@ -1,6 +1,6 @@
 @Gateway.Dashboard_HostAddress = http://localhost:5246
 
-GET {{Gateway.Dashboard_HostAddress}}/weatherforecast/
+GET {{Gateway.Dashboard_HostAddress}}/telemetry/
 Accept: application/json
 
 ###

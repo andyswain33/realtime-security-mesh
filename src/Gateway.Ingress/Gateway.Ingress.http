@@ -1,6 +1,6 @@
 @Gateway.Ingress_HostAddress = http://localhost:5187
 
-GET {{Gateway.Ingress_HostAddress}}/weatherforecast/
+GET {{Gateway.Ingress_HostAddress}}/telemetry/
 Accept: application/json
 
 ###
